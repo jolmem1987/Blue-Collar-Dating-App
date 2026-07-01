@@ -1,0 +1,405 @@
+// BlueCollar Match — Prisma schema
+// "Dating for blue-collar singles and the people who appreciate them."
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// Enums
+// ----------------------------------------------------------------------------
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Gender {
+  MAN
+  WOMAN
+  NONBINARY
+  OTHER
+}
+
+enum InterestedIn {
+  MEN
+  WOMEN
+  EVERYONE
+}
+
+enum RelationshipIntent {
+  SERIOUS
+  DATING
+  FRIENDSHIP_FIRST
+  NOT_SURE
+}
+
+enum BlueCollarPreference {
+  BLUE_COLLAR_ONLY
+  OPEN
+}
+
+// "What best describes you" from onboarding
+enum WorkerCategory {
+  TRADE
+  MANUFACTURING_MAINTENANCE
+  TRANSPORTATION_LOGISTICS
+  AGRICULTURE_OUTDOOR
+  NOT_BLUE_COLLAR_INTERESTED
+  OTHER
+}
+
+enum UnionStatus {
+  UNION
+  NON_UNION
+  PREFER_NOT_TO_SAY
+}
+
+enum ShiftType {
+  DAY
+  NIGHT
+  SWING
+  ROTATING
+  ON_CALL
+  VARIES
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+}
+
+enum AccountStatus {
+  ACTIVE
+  PAUSED
+  BANNED
+  DELETED
+}
+
+enum ModerationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FLAGGED
+}
+
+enum LikeType {
+  LIKE
+  SUPER_LIKE // future paid action; stored but treated as LIKE in MVP
+}
+
+enum ReportReason {
+  FAKE_PROFILE
+  HARASSMENT
+  INAPPROPRIATE_PHOTOS
+  SCAM_OR_MONEY_REQUEST
+  UNDERAGE
+  OFFLINE_BEHAVIOR
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWING
+  ACTION_TAKEN
+  DISMISSED
+}
+
+enum SubscriptionPlan {
+  FREE
+}
+
+enum SubscriptionStatus {
+  NONE
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+// ----------------------------------------------------------------------------
+// Auth-support models (NextAuth Prisma adapter)
+// ----------------------------------------------------------------------------
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Used for email verification + password reset (separate from auth sessions)
+model Token {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  type      String // "EMAIL_VERIFY" | "PASSWORD_RESET"
+  expires   DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ----------------------------------------------------------------------------
+// Core: User
+// ----------------------------------------------------------------------------
+
+model User {
+  id           String  @id @default(cuid())
+  email        String  @unique
+  passwordHash String?
+  role         Role    @default(USER)
+
+  // Identity
+  firstName String?
+  birthDate DateTime?
+  gender    Gender?
+
+  // Matching preferences
+  interestedIn         InterestedIn?
+  relationshipIntent   RelationshipIntent?
+  blueCollarPreference BlueCollarPreference? @default(OPEN)
+  minAgePref           Int?                  @default(18)
+  maxAgePref           Int?                  @default(60)
+  maxDistanceMiles     Int?                  @default(50)
+
+  // Location
+  location  String?
+  latitude  Float?
+  longitude Float?
+
+  // Profile
+  bio              String? @db.Text
+  hobbies          String? @db.Text
+  weekendLifestyle String? @db.Text
+  lookingFor       String? @db.Text
+
+  // Blue-collar work details
+  isBlueCollarWorker Boolean         @default(false)
+  workerCategory     WorkerCategory?
+  tradeCategory      String? // from TRADE_CATEGORIES constant
+  jobTitle           String?
+  yearsInTrade       Int?
+  unionStatus        UnionStatus?
+  workSchedule       String?
+  shiftType          ShiftType?
+  travelForWork      Boolean         @default(false)
+
+  // Blue-collar profile prompts (free text answers)
+  promptTrade           String? @db.Text // "My trade is..."
+  promptWhyWorkHard     String? @db.Text // "I work hard because..."
+  promptBestPart        String? @db.Text // "The best part of my job is..."
+  promptHardestSchedule String? @db.Text // "The hardest part of my schedule is..."
+  promptIdealWeekend    String? @db.Text // "My ideal weekend is..."
+  promptProudSkill      String? @db.Text // "A skill I am proud of is..."
+  promptMisunderstood   String? @db.Text // "Something people misunderstand..."
+  promptRelaxAfterWork  String? @db.Text // "My favorite way to relax after work is..."
+
+  // Account/system
+  emailVerified      DateTime?
+  onboardingComplete Boolean            @default(false)
+  verificationStatus VerificationStatus @default(UNVERIFIED)
+  accountStatus      AccountStatus      @default(ACTIVE)
+  banReason          String?
+  agreedToTerms      Boolean            @default(false)
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastActiveAt DateTime  @default(now())
+
+  // Relations
+  accounts Account[]
+  sessions Session[]
+  tokens   Token[]
+  photos   Photo[]
+
+  sentLikes     Like[]  @relation("LikesSent")
+  receivedLikes Like[]  @relation("LikesReceived")
+  sentPasses    Pass[]  @relation("PassesSent")
+  receivedPasses Pass[] @relation("PassesReceived")
+
+  matchesAsA Match[] @relation("MatchUserA")
+  matchesAsB Match[] @relation("MatchUserB")
+  messages   Message[]
+
+  reportsMade     Report[] @relation("Reporter")
+  reportsReceived Report[] @relation("Reported")
+  blocksMade      Block[]  @relation("Blocker")
+  blocksReceived  Block[]  @relation("Blocked")
+
+  subscription Subscription?
+
+  @@index([accountStatus])
+  @@index([verificationStatus])
+  @@index([lastActiveAt])
+}
+
+// ----------------------------------------------------------------------------
+// Photo
+// ----------------------------------------------------------------------------
+
+model Photo {
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  imageUrl         String
+  order            Int              @default(0)
+  isPrimary        Boolean          @default(false)
+  moderationStatus ModerationStatus @default(PENDING)
+  createdAt        DateTime         @default(now())
+
+  @@index([userId])
+  @@index([moderationStatus])
+}
+
+// ----------------------------------------------------------------------------
+// Like / Pass
+// ----------------------------------------------------------------------------
+
+model Like {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  type       LikeType @default(LIKE)
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("LikesSent", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("LikesReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@index([receiverId])
+}
+
+model Pass {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("PassesSent", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("PassesReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@index([senderId])
+}
+
+// ----------------------------------------------------------------------------
+// Match
+// ----------------------------------------------------------------------------
+
+model Match {
+  id          String    @id @default(cuid())
+  userAId     String
+  userBId     String
+  createdAt   DateTime  @default(now())
+  unmatchedAt DateTime?
+
+  userA    User      @relation("MatchUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB    User      @relation("MatchUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  // userAId is always the lexicographically smaller id (enforced in app code)
+  @@unique([userAId, userBId])
+  @@index([userBId])
+}
+
+// ----------------------------------------------------------------------------
+// Message
+// ----------------------------------------------------------------------------
+
+model Message {
+  id               String           @id @default(cuid())
+  matchId          String
+  senderId         String
+  body             String           @db.Text
+  imageUrl         String?
+  isRead           Boolean          @default(false)
+  moderationStatus ModerationStatus @default(APPROVED)
+  createdAt        DateTime         @default(now())
+
+  match  Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  sender User  @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([matchId])
+  @@index([senderId])
+}
+
+// ----------------------------------------------------------------------------
+// Report / Block
+// ----------------------------------------------------------------------------
+
+model Report {
+  id             String       @id @default(cuid())
+  reporterId     String
+  reportedUserId String
+  reason         ReportReason
+  details        String?      @db.Text
+  status         ReportStatus @default(OPEN)
+  createdAt      DateTime     @default(now())
+
+  reporter User @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported User @relation("Reported", fields: [reportedUserId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([reportedUserId])
+}
+
+model Block {
+  id            String   @id @default(cuid())
+  blockerId     String
+  blockedUserId String
+  createdAt     DateTime @default(now())
+
+  blocker User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("Blocked", fields: [blockedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedUserId])
+  @@index([blockedUserId])
+}
+
+// ----------------------------------------------------------------------------
+// Subscription — the app is free; every account is on the FREE plan.
+// ----------------------------------------------------------------------------
+
+model Subscription {
+  id        String             @id @default(cuid())
+  userId    String             @unique
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan      SubscriptionPlan   @default(FREE)
+  status    SubscriptionStatus @default(NONE)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+}
