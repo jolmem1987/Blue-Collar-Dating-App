@@ -114,58 +114,53 @@ The legal pages (Terms, Privacy) are **starter templates** clearly marked as suc
 
 ---
 
-## 🚀 Deploying (GitHub → DigitalOcean + Cloudflare)
+## 🚀 Deploying (GitHub → Vercel)
 
-The app is a standard Next.js server, so it runs anywhere that can run Node. This is the
-GitHub + DigitalOcean App Platform + Cloudflare path. You do **not** need Vercel.
+Vercel builds this repo straight from GitHub and auto-detects Next.js — it runs the `build`
+script (`prisma generate && next build`), so the Prisma Client is always generated fresh on
+every deploy. No `vercel.json` or extra config is needed.
 
-### 1. Push the code to GitHub
+### 1. Create the production database (free)
+Vercel runs your app as serverless functions, so use a Postgres that's built for that:
+- **Neon** — neon.tech (free tier). On the Neon dashboard, copy the **Pooled** connection
+  string (the host contains `-pooler`); pooling is important for serverless.
+- Supabase also works. Copy its `postgresql://...` string.
+
+### 2. Import the repo into Vercel
+1. Go to **vercel.com → Add New → Project → Import Git Repository** and pick
+   `Blue-Collar-Dating-App`.
+2. Framework preset auto-detects as **Next.js** — leave the build/output settings default.
+3. Under **Environment Variables**, add:
+   | Name | Value |
+   |------|-------|
+   | `DATABASE_URL` | your Neon **pooled** connection string |
+   | `NEXTAUTH_SECRET` | generate: `openssl rand -base64 32` |
+   | `NEXTAUTH_URL` | your Vercel URL, e.g. `https://blue-collar-dating-app.vercel.app` |
+   | `ADMIN_EMAILS` | your email, e.g. `jeff@powerholicsperformance.com` |
+   | *(optional)* `EMAIL_SERVER_*`, `NEXT_PUBLIC_CLOUDINARY_*` | email + photo hosting |
+4. Click **Deploy**. Every `git push` to `main` auto-redeploys.
+
+> Update `NEXTAUTH_URL` to your final domain once set — if it doesn't match the URL you visit,
+> logins will fail.
+
+### 3. Create the tables (once)
+The build compiles the app but doesn't create tables. From your local shell, point at the
+production DB and push the schema:
 ```bash
-git init
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/<you>/bluecollar-match.git
-git push -u origin main
+DATABASE_URL="<neon-pooled-url>" npm run db:push
+# optional demo data: DATABASE_URL="<neon-pooled-url>" npm run db:seed
 ```
 
-### 2. Create the production database
-Use a hosted Postgres and copy its connection string (`postgresql://...`):
-- **Neon** (free tier, quick) — neon.tech, or
-- **DigitalOcean Managed Postgres** (in the DO console → *Databases → Create*) so it lives next
-  to the app.
+### 4. (Optional) Custom domain via Cloudflare
+1. In Vercel → **Project → Settings → Domains**, add your domain; Vercel shows the DNS records.
+2. In Cloudflare DNS, add the record Vercel gives you (usually a `CNAME` to
+   `cname.vercel-dns.com`). Set that record to **DNS only** (grey cloud) so Vercel can issue and
+   manage the TLS certificate.
+3. Point `NEXTAUTH_URL` at the custom domain.
 
-### 3. Deploy the app on DigitalOcean App Platform
-1. DO console → **Apps → Create App → GitHub**, and pick this repo/branch (`main`).
-2. DO auto-detects Next.js. Confirm:
-   - **Build command:** `npm run build`  (runs `prisma generate` automatically)
-   - **Run command:** `npm start`
-   - **HTTP port:** `3000`
-3. Add environment variables (from `.env.example`), marking secrets as *encrypted*:
-   - `DATABASE_URL` — your production Postgres string
-   - `NEXTAUTH_SECRET` — `openssl rand -base64 32`
-   - `NEXTAUTH_URL` — your public URL, e.g. `https://bluecollarmatch.app`
-   - Optional: `EMAIL_SERVER_*`, `NEXT_PUBLIC_CLOUDINARY_*`, `ADMIN_EMAILS`
-4. Deploy. Every `git push` to `main` auto-redeploys.
-
-### 4. Create the tables (once)
-Point your local shell at the production DB and push the schema:
-```bash
-DATABASE_URL="<prod-url>" npm run db:push
-# optional demo data: DATABASE_URL="<prod-url>" npm run db:seed
-```
-(Or run it from the App Platform **Console** tab.)
-
-### 5. Point your domain through Cloudflare
-1. In DO, find your app's default URL (`*.ondigitalocean.app`), and under **Settings →
-   Domains** add your custom domain.
-2. In **Cloudflare DNS**, add a `CNAME` for your domain → the `ondigitalocean.app` hostname
-   (proxy **on** — the orange cloud), then finish domain verification in DO.
-3. Set Cloudflare SSL/TLS mode to **Full (strict)** so Cloudflare↔DO stays encrypted.
-4. Make sure `NEXTAUTH_URL` matches the final `https://` domain, or logins will misbehave.
-
-> Note: the in-memory rate limiter (`lib/ratelimit.ts`) is per-instance — swap it for
-> Redis/Upstash if you scale the app to more than one instance.
+> Note: the in-memory rate limiter (`lib/ratelimit.ts`) doesn't persist across serverless
+> invocations — swap it for Upstash/Redis when you're ready to enforce limits reliably in
+> production.
 
 ---
 
