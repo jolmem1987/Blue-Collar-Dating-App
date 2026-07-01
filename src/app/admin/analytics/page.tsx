@@ -30,12 +30,12 @@ export default async function AdminAnalyticsPage() {
       by: ["tradeCategory"],
       where: { tradeCategory: { not: null }, accountStatus: { not: "DELETED" } },
       _count: { _all: true },
-    }) as Promise<TradeGroup[]>,
+    }) as unknown as Promise<TradeGroup[]>,
     prisma.user.groupBy({
       by: ["relationshipIntent"],
       where: { relationshipIntent: { not: null }, accountStatus: { not: "DELETED" } },
       _count: { _all: true },
-    }) as Promise<IntentGroup[]>,
+    }) as unknown as Promise<IntentGroup[]>,
   ]);
 
   const likeToMatch = totalLikes > 0 ? Math.round((totalMatches / totalLikes) * 100) : 0;

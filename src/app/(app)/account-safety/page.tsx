@@ -47,7 +47,7 @@ export default async function AccountSafetyPage() {
           Blocked users ({blocks.length})
         </h2>
         <BlockedList
-          initial={blocks.map((b: { blocked: { id: string; firstName: string } }) => ({ id: b.blocked.id, firstName: b.blocked.firstName }))}
+          initial={blocks.map((b) => ({ id: b.blocked.id, firstName: b.blocked.firstName }))}
         />
       </div>
 
