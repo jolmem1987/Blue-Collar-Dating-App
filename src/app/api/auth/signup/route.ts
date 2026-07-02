@@ -20,6 +20,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
   }
   const { email, password, birthDate, agreedToTerms } = parsed.data;
+  const requireEmailVerification = process.env.REQUIRE_EMAIL_VERIFICATION === "true";
 
   // 18+ requirement
   if (!isAdult(birthDate)) {
@@ -39,13 +40,16 @@ export async function POST(req: Request) {
       passwordHash,
       birthDate: new Date(birthDate),
       agreedToTerms,
+      emailVerified: requireEmailVerification ? null : new Date(),
       subscription: { create: { plan: "FREE", status: "NONE" } },
     },
   });
 
-  const token = await createToken(user.id, "EMAIL_VERIFY");
-  const mail = verificationEmail(token);
-  await sendEmail({ to: normalized, subject: mail.subject, html: mail.html, text: mail.text });
+  if (requireEmailVerification) {
+    const token = await createToken(user.id, "EMAIL_VERIFY");
+    const mail = verificationEmail(token);
+    await sendEmail({ to: normalized, subject: mail.subject, html: mail.html, text: mail.text });
+  }
 
   return NextResponse.json({ ok: true });
 }

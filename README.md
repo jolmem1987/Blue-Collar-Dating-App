@@ -92,7 +92,7 @@ src/
 
 ## 🔑 Core flows
 
-- **Auth** — email/password via NextAuth Credentials (bcrypt-hashed), email verification + password reset tokens, JWT sessions. Banned/deleted/unverified users can't sign in.
+- **Auth** — email/password via NextAuth Credentials (bcrypt-hashed), password reset tokens, JWT sessions, optional email verification enforcement (`REQUIRE_EMAIL_VERIFICATION=true`). Banned/deleted users can't sign in.
 - **Onboarding** — 5 steps: basics → work + trade → who you're looking for → relationship intent → blue-collar preference. Required before using the app (enforced in middleware).
 - **Discover & matching** — `lib/matching.ts` excludes self, blocks (both directions), prior likes/passes, and inactive accounts, then ranks candidates by the spec's 9 priorities (preference → age → distance → intent → blue-collar → trade → activity → verified → completeness). A like becomes a **match** only when it's mutual.
 - **Messaging** — only matched users can message each other (enforced server-side). Rate-limited, with read receipts and a safety banner. Lightweight polling keeps threads fresh.

@@ -9,6 +9,8 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "")
   .map((e) => e.trim().toLowerCase())
   .filter(Boolean);
 
+const REQUIRE_EMAIL_VERIFICATION = process.env.REQUIRE_EMAIL_VERIFICATION === "true";
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" },
@@ -38,7 +40,7 @@ export const authOptions: NextAuthOptions = {
         if (user.accountStatus === "DELETED")
           throw new Error("This account no longer exists.");
 
-        if (!user.emailVerified)
+        if (REQUIRE_EMAIL_VERIFICATION && !user.emailVerified)
           throw new Error("Please verify your email before signing in.");
 
         // Bootstrap admins from env
