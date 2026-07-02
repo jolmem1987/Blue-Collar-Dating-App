@@ -10,6 +10,8 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "")
   .filter(Boolean);
 
 const REQUIRE_EMAIL_VERIFICATION = process.env.REQUIRE_EMAIL_VERIFICATION === "true";
+const AUTH_SECRET =
+  process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? process.env.NEXT_AUTH;
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -81,5 +83,5 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: AUTH_SECRET,
 };
